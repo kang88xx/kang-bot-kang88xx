@@ -72,7 +72,7 @@ def summarize(sections: list[dict], cfg: dict) -> list[dict]:
         model=cfg["model"],
         max_tokens=16000,
         betas=["server-side-fallback-2026-07-01"],
-        extra_body={"fallbacks": "default"},  # 안전 분류기 거절 시 서버가 다른 모델로 자동 재시도
+        fallbacks="default",  # 안전 분류기 거절 시 서버가 다른 모델로 자동 재시도
         output_config={"effort": cfg["effort"], "format": {"type": "json_schema", "schema": SCHEMA}},
         system=SYSTEM,
         messages=[{"role": "user", "content": _payload(sections, cfg["per_section"])}],
