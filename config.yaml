@@ -1,0 +1,52 @@
+# 아침 뉴스 브리핑 설정
+# 이 파일만 고치면 섹션/피드/키워드/모델을 바꿀 수 있습니다.
+
+timezone: Asia/Seoul
+
+# 요약에 쓸 Claude 모델
+model: claude-opus-5-5
+# 요약 노력도: low | medium | high  (low면 가장 저렴, 뉴스 요약에는 충분)
+effort: low
+
+# 기사 수집 범위: 최근 N시간 이내 기사만 후보로 사용
+max_age_hours: 24
+# 섹션당 Claude에게 넘길 후보 기사 수 (많을수록 비용 증가)
+max_candidates: 25
+# 섹션당 최종 선별 기사 수 (웹 페이지에 표시)
+per_section: 5
+# 카톡 메시지에 넣을 헤드라인 수 (카톡 텍스트는 200자 제한이라 3개 권장)
+kakao_top: 3
+
+# 브리핑 웹페이지 주소. 비워두면 GitHub Pages 주소(https://<아이디>.github.io/<저장소>/)를 자동 사용
+page_url: ""
+
+sections:
+  - key: general
+    name: 종합
+    emoji: "📰"
+    feeds:
+      - https://www.yna.co.kr/rss/news.xml
+      - https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko
+  - key: economy
+    name: 경제/증시
+    emoji: "📈"
+    feeds:
+      - https://www.yna.co.kr/rss/economy.xml
+      - https://www.yna.co.kr/rss/market.xml
+      - https://www.hankyung.com/feed/economy
+      - https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=ko&gl=KR&ceid=KR:ko
+  - key: tech
+    name: IT/테크
+    emoji: "💻"
+    feeds:
+      - https://rss.etnews.com/Section901.xml
+      - https://www.hankyung.com/feed/it
+      - https://it.donga.com/feeds/rss/
+      - https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=ko&gl=KR&ceid=KR:ko
+
+# 관심 키워드. 키워드마다 구글 뉴스 검색 결과로 섹션이 하나씩 추가됩니다.
+# 예시:
+# keywords:
+#   - 반도체
+#   - 부동산
+keywords: []
