@@ -57,7 +57,14 @@ def main() -> int:
         return 1
 
     print("[2/4] 요약")
-    sections = summarize_without_claude(sections, cfg) if args.skip_claude else summarize(sections, cfg)
+    if args.skip_claude:
+        sections = summarize_without_claude(sections, cfg)
+    else:
+        try:
+            sections = summarize(sections, cfg)
+        except Exception as exc:  # 요약이 실패해도 제목만으로라도 브리핑은 보낸다
+            print(f"  ! Claude 요약 실패, 제목만으로 진행합니다: {exc}")
+            sections = summarize_without_claude(sections, cfg)
 
     print("[3/4] 웹페이지 생성")
     out = write_pages(sections, now)
@@ -71,6 +78,9 @@ def main() -> int:
     if not url:
         print("  ! page_url을 알 수 없습니다. config.yaml의 page_url 또는 PAGE_URL 환경변수를 설정하세요.")
     messages = build_messages(sections, now, cfg["kakao_top"])
+    if not messages:
+        print("  ! 보낼 기사가 없습니다.")
+        return 1
     if args.dry_run:
         for text, key in messages:
             print(f"----- ({len(text)}자) 링크: {url}#{key}\n{text}")

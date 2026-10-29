@@ -55,7 +55,12 @@ def wait_for_code(timeout: int = 300) -> str | None:
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):  # noqa: N802
-            qs = parse_qs(urlparse(self.path).query)
+            parsed = urlparse(self.path)
+            if parsed.path != "/callback":  # favicon 등 다른 요청은 무시
+                self.send_response(404)
+                self.end_headers()
+                return
+            qs = parse_qs(parsed.query)
             if "code" in qs:
                 result["code"] = qs["code"][0]
                 body = "✅ 카카오 로그인 완료. 이 창을 닫고 터미널로 돌아가세요."

@@ -77,21 +77,30 @@ def summarize(sections: list[dict], cfg: dict) -> list[dict]:
         system=SYSTEM,
         messages=[{"role": "user", "content": _payload(sections, cfg["per_section"])}],
     )
-    if response.stop_reason == "refusal":
-        raise RuntimeError(f"Claude가 요청을 거절했습니다: {response.stop_details}")
-    text = "".join(b.text for b in response.content if b.type == "text")
-    data = json.loads(text)
     usage = response.usage
-    print(f"[claude] model={response.model} in={usage.input_tokens} out={usage.output_tokens}")
+    print(f"[claude] model={response.model} stop={response.stop_reason} in={usage.input_tokens} out={usage.output_tokens}")
+    if response.stop_reason == "refusal":
+        raise RuntimeError(f"Claude가 요청을 거절했습니다: {getattr(response, 'stop_details', None)}")
+    if response.stop_reason != "end_turn":
+        raise RuntimeError(f"Claude 응답이 완결되지 않았습니다 (stop_reason={response.stop_reason})")
+    text = "".join(b.text for b in response.content if b.type == "text")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Claude 응답 JSON 파싱 실패: {exc}\n{text[:300]}") from exc
 
     by_key = {s["key"]: s for s in data.get("sections", [])}
     for sec in sections:
         picked = by_key.get(sec["key"], {}).get("items", [])
-        items = []
-        for p in picked[: cfg["per_section"]]:
+        items: list[dict] = []
+        used: set[int] = set()
+        for p in picked:
             idx = p.get("id")
-            if not isinstance(idx, int) or not (0 <= idx < len(sec["candidates"])):
+            if not isinstance(idx, int) or not (0 <= idx < len(sec["candidates"])) or idx in used:
                 continue
+            used.add(idx)
+            if len(items) >= cfg["per_section"]:
+                break
             cand = sec["candidates"][idx]
             lines = [str(l).strip() for l in (p.get("summary") or []) if str(l).strip()][:3]
             items.append({**cand, "headline": (p.get("headline") or cand["title"]).strip()[:40], "summary": lines})

@@ -60,7 +60,7 @@ def fetch_feed(url: str, timeout: int = 20) -> list[dict]:
         link = (item.findtext("link") or "").strip()
         desc = _clean(item.findtext("description"))
         pub = _parse_date(item.findtext("pubDate"))
-        source = _clean(item.findtext("source"), 50) or channel_title
+        source = _clean(item.findtext("source"), 50)
         if is_google:
             # 구글뉴스 제목은 "제목 - 매체명" 형식
             if " - " in title:
@@ -70,7 +70,7 @@ def fetch_feed(url: str, timeout: int = 20) -> list[dict]:
             desc = ""
         if title and link:
             items.append({"title": title, "link": link, "description": desc,
-                          "published": pub, "source": source})
+                          "published": pub, "source": source or channel_title})
 
     # Atom
     ns = {"a": "http://www.w3.org/2005/Atom"}

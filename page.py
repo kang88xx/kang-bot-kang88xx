@@ -65,12 +65,12 @@ def write_pages(sections: list[dict], now: datetime, keep_archive: int = 14) -> 
     archive = DOCS / "archive"
     archive.mkdir(exist_ok=True)
     today = now.strftime("%Y-%m-%d")
-    # 아카이브 정리: 최근 N개만 유지
-    existing = sorted(p.stem for p in archive.glob("*.html"))
-    for old in existing[:-keep_archive] if len(existing) > keep_archive else []:
-        (archive / f"{old}.html").unlink(missing_ok=True)
-    dates = sorted({*existing[-keep_archive:], today}, reverse=True)
-    page = render(sections, now, [d for d in dates if d != today][:7])
+    existing = sorted(p.stem for p in archive.glob("*.html") if p.stem != today)
+    page = render(sections, now, existing[::-1][:7])
     (archive / f"{today}.html").write_text(page.replace("href='archive/", "href='"), encoding="utf-8")
     (DOCS / "index.html").write_text(page, encoding="utf-8")
+    # 아카이브 정리: 오늘 포함 최근 keep_archive개만 유지
+    all_dates = sorted(p.stem for p in archive.glob("*.html"))
+    for old in all_dates[: max(0, len(all_dates) - keep_archive)]:
+        (archive / f"{old}.html").unlink(missing_ok=True)
     return DOCS / "index.html"
