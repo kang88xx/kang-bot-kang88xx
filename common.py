@@ -31,7 +31,6 @@ def load_config(path: Path = ROOT / "config.yaml") -> dict:
     cfg.setdefault("max_age_hours", 24)
     cfg.setdefault("max_candidates", 25)
     cfg.setdefault("per_section", 5)
-    cfg.setdefault("kakao_top", 3)
     cfg.setdefault("sections", [])
     cfg.setdefault("keywords", []) 
     cfg["keywords"] = [k for k in (cfg.get("keywords") or []) if k]

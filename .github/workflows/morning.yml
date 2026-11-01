@@ -1,16 +1,16 @@
-name: Morning news briefing
+name: Daily assistant briefing
 
 on:
   schedule:
-    # UTC 기준. 22:00 UTC = 한국시간 07:00 (GitHub 사정으로 몇 분 늦을 수 있음)
-    - cron: "0 22 * * *"
+    # UTC 기준. 22:50 UTC = 한국시간 07:50 (GitHub 사정으로 몇 분 늦을 수 있음)
+    - cron: "50 22 * * *"
   workflow_dispatch:   # Actions 탭에서 수동 실행용
 
 permissions:
   contents: write
 
 concurrency:
-  group: morning-news
+  group: daily-briefing
   cancel-in-progress: false
 
 jobs:
@@ -27,30 +27,30 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Build digest and send to KakaoTalk
+      - name: Build digest and send to Telegram
         env:
-          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
-          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          TOKEN_ENC_KEY: ${{ secrets.TOKEN_ENC_KEY }}
         run: python main.py
 
-      - name: Commit refreshed token and today's page
-        if: always()   # 발송이 실패해도 갱신된 카카오 토큰은 반드시 저장
+      - name: Commit check-in state and today's page
+        if: always()   # 발송이 실패해도 읽어 들인 체크인 기록은 저장
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A state/kakao_token.enc docs 2>/dev/null || true
+          # 이 실행이 바꾼 것은 state/ 와 docs/ 만이므로, 원격 최신 위에 그 두 폴더만 얹어 커밋한다
+          # (실행 중 사용자가 푸시한 커밋을 되돌리지 않기 위해 rebase 대신 이 방식을 쓴다)
+          keep="$(mktemp -d)"
+          cp -r state docs "$keep"/ 2>/dev/null || true
+          git fetch origin "${GITHUB_REF_NAME}"
+          git reset --hard "origin/${GITHUB_REF_NAME}"
+          [ -d "$keep/state" ] && cp -r "$keep"/state . || true
+          [ -d "$keep/docs" ] && cp -r "$keep"/docs . || true
+          git add -A state docs
           if git diff --cached --quiet; then
             echo "변경 없음"
             exit 0
           fi
           git commit -m "chore: 브리핑 $(TZ=Asia/Seoul date +%F)"
-          if ! git pull --rebase origin "${GITHUB_REF_NAME}"; then
-            # 충돌 시: 원격 최신 위에 내 변경분을 그대로 다시 얹는다
-            git rebase --abort || true
-            git fetch origin "${GITHUB_REF_NAME}"
-            git reset --soft "origin/${GITHUB_REF_NAME}"
-            git commit -m "chore: 브리핑 $(TZ=Asia/Seoul date +%F)"
-          fi
           git push

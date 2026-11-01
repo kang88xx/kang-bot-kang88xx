@@ -1,4 +1,4 @@
-"""최초 1회 설정 마법사: 키 입력 → 카카오 로그인 → 토큰 암호화 저장 → 테스트 발송 → GitHub 시크릿 등록.
+"""최초 1회 설정 마법사: 키 입력 → 봇 확인 → chat_id 찾기 → 테스트 발송 → GitHub 시크릿 등록.
 
     python setup.py
 """
@@ -8,20 +8,14 @@ import os
 import shutil
 import subprocess
 import sys
-import threading
-import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
-from urllib.parse import parse_qs, urlencode, urlparse
+import time
 
-from cryptography.fernet import Fernet
-
+import checkin
 from common import ROOT, load_config, load_dotenv, page_url
+from telegram import delete_webhook, get_me, get_updates, send_message
 
 ENV_FILE = ROOT / ".env"
-REDIRECT_URI = "http://localhost:8765/callback"
-AUTH_URL = "https://kauth.kakao.com/oauth/authorize"
-SECRET_NAMES = ["KAKAO_REST_API_KEY", "KAKAO_CLIENT_SECRET", "ANTHROPIC_API_KEY", "TOKEN_ENC_KEY"]
+SECRET_NAMES = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "ANTHROPIC_API_KEY"]
 
 
 def ask(prompt: str, default: str = "", secret: bool = False) -> str:
@@ -31,98 +25,36 @@ def ask(prompt: str, default: str = "", secret: bool = False) -> str:
 
 
 def write_env(values: dict) -> None:
-    lines = [f"{k}={v}" for k, v in values.items() if v is not None]
-    ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    """기존 .env 의 다른 키(PAGE_URL 등)는 유지하고 값이 있는 키만 갱신."""
+    existing: dict = {}
+    if ENV_FILE.exists():
+        for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, _, v = line.partition("=")
+                existing[k.strip()] = v.strip()
+    existing.update({k: v for k, v in values.items() if v})
+    ENV_FILE.write_text("\n".join(f"{k}={v}" for k, v in existing.items()) + "\n", encoding="utf-8")
     os.environ.update({k: v for k, v in values.items() if v})
 
 
-def open_browser(url: str) -> None:
-    try:
-        if webbrowser.open(url):
-            return
-    except Exception:
-        pass
-    if shutil.which("cmd.exe"):  # WSL → 윈도우 기본 브라우저
-        try:
-            subprocess.run(["cmd.exe", "/c", "start", "", url], check=False, timeout=10)
-        except Exception:
-            pass
-
-
-def wait_for_code(timeout: int = 300) -> str | None:
-    """localhost:8765 에서 ?code= 를 받을 때까지 대기."""
-    result: dict = {}
-
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):  # noqa: N802
-            parsed = urlparse(self.path)
-            if parsed.path != "/callback":  # favicon 등 다른 요청은 무시
-                self.send_response(404)
-                self.end_headers()
-                return
-            qs = parse_qs(parsed.query)
-            if "code" in qs:
-                result["code"] = qs["code"][0]
-                body = "✅ 카카오 로그인 완료. 이 창을 닫고 터미널로 돌아가세요."
-            else:
-                result["error"] = qs.get("error_description", qs.get("error", ["?"]))[0]
-                body = f"❌ 로그인 실패: {result['error']}"
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(f"<meta charset='utf-8'><h2>{body}</h2>".encode())
-
-        def log_message(self, *_):
-            pass
-
-    try:
-        server = HTTPServer(("127.0.0.1", 8765), Handler)
-    except OSError as exc:
-        print(f"(로컬 서버를 열 수 없음: {exc}. 수동 입력으로 진행)")
-        return None
-    server.timeout = 1
-    deadline = __import__("time").time() + timeout
-    while not result and __import__("time").time() < deadline:
-        server.handle_request()
-    server.server_close()
-    if "error" in result:
-        print(f"카카오 로그인 오류: {result['error']}")
-    return result.get("code")
-
-
-def kakao_login() -> None:
-    from tokens import exchange_code, save_tokens
-
-    url = AUTH_URL + "?" + urlencode({
-        "client_id": os.environ["KAKAO_REST_API_KEY"],
-        "redirect_uri": REDIRECT_URI,
-        "response_type": "code",
-        "scope": "talk_message",
-    })
-    print("\n브라우저가 열리면 카카오 계정으로 로그인하고 '카카오톡 메시지 전송'에 동의하세요.")
-    print(f"자동으로 열리지 않으면 이 주소를 브라우저에 붙여넣으세요:\n\n  {url}\n")
-    threading.Thread(target=open_browser, args=(url,), daemon=True).start()
-    code = wait_for_code()
-    if not code:
-        raw = input("로그인 후 이동한 주소(http://localhost:8765/callback?code=...)를 그대로 붙여넣으세요: ").strip()
-        code = parse_qs(urlparse(raw).query).get("code", [raw])[0]
-    tokens = exchange_code(code, REDIRECT_URI)
-    save_tokens(tokens)
-    print("✅ 카카오 토큰 저장 완료 (state/kakao_token.enc, 암호화됨)")
-
-
-def test_send(url: str) -> bool:
-    from kakao import send_text
-    from tokens import get_access_token
-
-    try:
-        send_text(get_access_token(), "✅ 아침 뉴스 브리핑 설정이 완료됐습니다.\n내일 아침 7시부터 이 채팅방으로 뉴스가 도착합니다.", url, "페이지 열기")
-        print("✅ 테스트 메시지를 보냈습니다. 카카오톡 '나와의 채팅'을 확인하세요.")
-        return True
-    except Exception as exc:
-        print(f"❌ 테스트 발송 실패: {exc}")
-        print("   → 카카오 개발자 콘솔에서 '카카오톡 메시지 전송' 동의항목과 Web 플랫폼 도메인 등록을 확인하세요.")
-        return False
+def find_chat_id(token: str, bot_username: str, wait_sec: int = 120) -> tuple[str, int | None]:
+    """최근 업데이트에서 개인 채팅 id를 찾는다. 없으면 사용자가 봇에게 말을 걸 때까지 기다린다."""
+    print(f"\n텔레그램에서 @{bot_username} 대화방을 열고 아무 메시지나 하나 보내주세요 (예: 안녕).")
+    deadline = time.time() + wait_sec
+    while True:
+        updates = get_updates(token)
+        chats = [(u["message"]["chat"], u["update_id"]) for u in updates
+                 if u.get("message") and u["message"].get("chat", {}).get("type") == "private"]
+        if chats:
+            chat, last_update = chats[-1][0], max(uid for _, uid in chats)
+            who = " ".join(x for x in [chat.get("first_name", ""), chat.get("last_name", "")] if x) or chat.get("username", "")
+            print(f"채팅방 발견: {who} (@{chat.get('username', '-')}, chat_id={chat['id']})")
+            if ask("이 사람이 본인 맞나요? (y/n)", "y").lower().startswith("y"):
+                return str(chat["id"]), last_update + 1
+            raise RuntimeError("다른 사람의 메시지가 먼저 들어왔습니다. 봇 username을 바꾸거나 잠시 뒤 다시 실행하세요.")
+        if time.time() > deadline:
+            raise RuntimeError("메시지를 받지 못했습니다. 봇에게 메시지를 보낸 뒤 setup.py를 다시 실행하세요.")
+        time.sleep(3)
 
 
 def push_to_github(values: dict) -> None:
@@ -138,48 +70,56 @@ def push_to_github(values: dict) -> None:
         value = values.get(name) or ""
         if not value:
             continue
-        subprocess.run(["gh", "secret", "set", name, "--body", value], cwd=ROOT, check=True)
+        r = subprocess.run(["gh", "secret", "set", name], cwd=ROOT, input=value, text=True, capture_output=True)
+        if r.returncode != 0:
+            print(f"  ! {name} 등록 실패: {r.stderr.strip()[:200]}  (수동: gh secret set {name})")
+            continue
         print(f"  - {name} 등록")
-    subprocess.run(["git", "add", "state/kakao_token.enc"], cwd=ROOT, check=True)
-    diff = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=ROOT)
-    if diff.returncode != 0:
-        subprocess.run(["git", "commit", "-m", "chore: 카카오 토큰 등록"], cwd=ROOT, check=True)
-    subprocess.run(["git", "push"], cwd=ROOT, check=True)
-    print("✅ GitHub에 토큰 파일 푸시 완료")
 
 
 def main() -> int:
     load_dotenv()
-    print("=== 아침 뉴스 브리핑 설정 ===\n(값을 그대로 두려면 Enter)\n")
+    print("=== 데일리 비서(텔레그램) 설정 ===\n(값을 그대로 두려면 Enter)\n")
     values = {
-        "KAKAO_REST_API_KEY": ask("1) 카카오 REST API 키", os.environ.get("KAKAO_REST_API_KEY", ""), secret=True),
-        "KAKAO_CLIENT_SECRET": ask("2) 카카오 Client Secret (사용 안 하면 Enter)", os.environ.get("KAKAO_CLIENT_SECRET", ""), secret=True),
-        "ANTHROPIC_API_KEY": ask("3) Anthropic API 키 (sk-ant-...)", os.environ.get("ANTHROPIC_API_KEY", ""), secret=True),
-        "TOKEN_ENC_KEY": os.environ.get("TOKEN_ENC_KEY") or Fernet.generate_key().decode(),
+        "TELEGRAM_BOT_TOKEN": ask("1) 텔레그램 봇 토큰 (@BotFather)", os.environ.get("TELEGRAM_BOT_TOKEN", ""), secret=True),
+        "ANTHROPIC_API_KEY": ask("2) Anthropic API 키 (sk-ant-...)", os.environ.get("ANTHROPIC_API_KEY", ""), secret=True),
+        "TELEGRAM_CHAT_ID": os.environ.get("TELEGRAM_CHAT_ID", ""),
     }
-    if not values["KAKAO_REST_API_KEY"]:
-        print("REST API 키는 필수입니다.")
+    token = values["TELEGRAM_BOT_TOKEN"]
+    if not token:
+        print("봇 토큰은 필수입니다.")
         return 1
+
+    me = get_me(token)
+    print(f"✅ 봇 확인: @{me.get('username')} ({me.get('first_name')})")
+    delete_webhook(token)  # webhook 이 걸려 있으면 getUpdates 가 409 로 실패하므로 해제
+
+    offset = None
+    if not values["TELEGRAM_CHAT_ID"]:
+        values["TELEGRAM_CHAT_ID"], offset = find_chat_id(token, me.get("username", ""))
     write_env(values)
     print(f"✅ 로컬 설정 저장: {ENV_FILE} (git에는 올라가지 않음)")
 
-    cfg = load_config()
-    url = page_url(cfg)
-    if not url:
-        remote = subprocess.run(["git", "remote", "get-url", "origin"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
-        if "github.com" in remote:
-            path = remote.split("github.com")[-1].lstrip(":/").removesuffix(".git")
-            owner, _, name = path.partition("/")
-            url = f"https://{owner.lower()}.github.io/{name}/"
-    print(f"브리핑 페이지 주소: {url or '(알 수 없음 — config.yaml의 page_url을 채우세요)'}")
-    if url:
-        host = urlparse(url).scheme + "://" + urlparse(url).netloc
-        print(f"※ 카카오 개발자 콘솔 > 앱 설정 > 플랫폼 > Web 사이트 도메인에 {host} 가 등록되어 있어야 링크 버튼이 동작합니다.")
+    # 설정 중 받은 메시지는 체크인으로 읽지 않도록 offset을 그 뒤로 둔다
+    state = checkin.load_state()
+    if offset is not None and (state.get("offset") or 0) < offset:
+        state["offset"] = offset
+    checkin.save_state(state)
 
-    kakao_login()
-    test_send(url or "https://github.com")
+    url = page_url(load_config())
+    text = ("✅ <b>데일리 비서 설정 완료</b>\n내일 아침 7시 50분부터 이 채팅방으로 브리핑이 도착합니다.\n\n"
+            "체크인은 이 채팅에 답장으로:\n<code>운동: O/X\n업무: 오늘 핵심 1~3개\n언어공부: O/X</code>")
+    try:
+        send_message(token, values["TELEGRAM_CHAT_ID"], text)
+        print("✅ 테스트 메시지를 보냈습니다. 텔레그램을 확인하세요.")
+    except Exception as exc:
+        print(f"❌ 테스트 발송 실패: {exc}")
+        return 1
+
     push_to_github(values)
-    print("\n설정이 끝났습니다. GitHub 저장소 Actions 탭에서 'Morning news briefing' → Run workflow 로 바로 한 번 보내볼 수 있습니다.")
+    print(f"\n설정이 끝났습니다. 브리핑 페이지: {url or '(GitHub Actions 첫 실행 뒤 생성)'}")
+    print("GitHub 저장소 Actions 탭에서 'Daily assistant briefing' → Run workflow 로 바로 한 번 보내볼 수 있습니다.")
+    print("state/telegram_state.json 이 바뀌었으면 커밋해 두세요 (git add state && git commit).")
     return 0
 
 
