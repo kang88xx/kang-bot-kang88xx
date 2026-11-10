@@ -7,6 +7,7 @@
 - 실행: GitHub Actions (PC가 꺼져 있어도 동작, 무료)
 - 발송: 텔레그램 봇 API (무료, 4096자 넘으면 자동 분할)
 - 요약: Claude API (유료, 하루 1회 호출)
+- 출처: 기사마다 `출처: 매체명` 링크로 원문 기사를 열 수 있음
 - 체크인: 봇 채팅에 답장하면 다음 날 아침 브리핑이 읽고 연속일수와 코멘트를 붙임
 
 ## 최초 설정 (한 번만)
@@ -64,6 +65,7 @@ GitHub 저장소 → **Actions → Daily assistant briefing → Run workflow**. 
 | `keywords` | 관심 키워드 목록. 키워드마다 구글뉴스 검색 섹션이 추가됨 (예: `- 반도체`) |
 | `per_section` | 섹션당 기사 수 (기본 3). 텔레그램 길이와 비용에 영향 |
 | `model`, `effort` | 요약 모델과 노력도. `claude-haiku-5-5`로 바꾸면 비용이 1/40 수준 |
+| `source_names` | 기사 도메인 → 표시할 매체명 (예: `yna.co.kr: 연합뉴스`). 새 피드를 추가할 때 함께 지정, 없으면 피드가 알려주는 이름을 정리해 사용 |
 | `max_candidates` | Claude에게 넘기는 섹션당 후보 수. 줄이면 비용 감소 |
 
 발송 시각은 `.github/workflows/morning.yml`의 `cron` (UTC 기준, 한국시간 −9시간)을 고치면 됩니다.
@@ -84,9 +86,10 @@ python main.py                           # 실제 발송
 
 ```
 체크인 답장 수집(checkin.py, getUpdates) → RSS 수집(news_fetch.py) → Claude 선별·요약+코멘트(summarize.py)
-→ docs/index.html 생성(page.py) → 텔레그램 발송(telegram.py) → 체크인 기록·페이지 커밋(워크플로)
+→ 구글뉴스 링크를 원문 주소로 변환(news_fetch.py) → docs/index.html 생성(page.py) → 텔레그램 발송(telegram.py) → 체크인 기록·페이지 커밋(워크플로)
 ```
 
+- 구글뉴스 링크 → 원문 주소 변환은 최선 노력 방식입니다. 실패하면(연속 3회 실패 시 중단) 구글뉴스 주소를 그대로 사용합니다.
 - 텔레그램 봇 토큰은 만료되지 않으므로 재로그인 절차가 없습니다.
 - `getUpdates`는 읽은 위치(offset)를 `state/telegram_state.json`에 저장해 같은 답장을 두 번 읽지 않습니다.
   텔레그램은 미수신 업데이트를 24시간만 보관하므로 워크플로가 하루 이상 멈추면 그 사이 답장은 유실될 수 있습니다.

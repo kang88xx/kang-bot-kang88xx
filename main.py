@@ -17,11 +17,12 @@ from zoneinfo import ZoneInfo
 
 import checkin
 from common import ROOT, load_config, load_dotenv, page_url
-from news_fetch import collect_all
+from news_fetch import collect_all, resolve_links
 from page import WEEKDAYS, write_pages
 from summarize import summarize, summarize_without_claude
-from telegram import send_chunk, split_message
+from telegram import send_chunk, split_message, visible_len
 
+DIVIDER = "─" * 12
 CHECKIN_TEMPLATE = "운동: O/X (한 일)\n업무: 오늘 핵심 1~3개 / 진행 상황\n언어공부: O/X"
 
 
@@ -46,16 +47,17 @@ def build_message(sections: list[dict], now: datetime, checkin_summary: dict, co
 
     for sec in sections:
         items = sec.get("items", [])
-        lines = [f"{sec['emoji']} <b>{_esc(sec['name'])}</b>"]
+        head = [DIVIDER, f"{sec['emoji']} <b>{_esc(sec['name'])}</b>"]
         if not items:
-            lines.append("특이사항 없음")
-        for it in items:
-            lines.append(f"• <a href=\"{html.escape(it['link'])}\">{_esc(it.get('headline') or it['title'])}</a>")
-            for s in it.get("summary", [])[:3]:
-                lines.append(f"  ‣ {_esc(s)}")
-        parts.append("\n".join(lines))
+            head.append("특이사항 없음")
+        parts.append("\n".join(head))
+        for n, it in enumerate(items, 1):
+            lines = [f"<b>{n}. {_esc(it.get('headline') or it['title'])}</b>"]
+            lines += [f"• {_esc(s)}" for s in it.get("summary", [])[:3]]
+            lines.append(f"출처: <a href=\"{html.escape(it['link'])}\">{_esc(it.get('source') or '원문')}</a>")
+            parts.append("\n".join(lines))
 
-    tail = [f"📝 <b>오늘 밤 체크인</b> — 이 채팅에 답장으로:", f"<code>{_esc(CHECKIN_TEMPLATE)}</code>"]
+    tail = [DIVIDER, f"📝 <b>오늘 밤 체크인</b> — 이 채팅에 답장으로:", f"<code>{_esc(CHECKIN_TEMPLATE)}</code>"]
     if url:
         tail.append(f'<a href="{html.escape(url)}">전체 브리핑 웹페이지</a>')
     parts.append("\n".join(tail))
@@ -112,6 +114,7 @@ def main() -> int:
         except Exception as exc:  # 요약이 실패해도 제목만으로라도 브리핑은 보낸다
             print(f"  ! Claude 요약 실패, 제목만으로 진행합니다: {exc}")
             sections, comment = summarize_without_claude(sections, cfg)
+    resolve_links(sections)
 
     print("[4/5] 웹페이지 생성")
     out = write_pages(sections, now)
@@ -125,7 +128,7 @@ def main() -> int:
     text = build_message(sections, now, checkin_summary, comment, url, checkin_error)
     chunks = split_message(text)
     if args.dry_run:
-        print(f"----- ({len(text)}자, {len(chunks)}개 메시지)\n{text}\n(dry-run: 전송 생략)")
+        print(f"----- (본문 {visible_len(text)}자, {len(chunks)}개 메시지)\n{text}\n(dry-run: 전송 생략)")
         return 0
     if not token or not chat_id:
         print("  ! TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 환경변수가 필요합니다 (setup.py를 먼저 실행하세요).")

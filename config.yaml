@@ -50,6 +50,15 @@ sections:
       - https://www.yna.co.kr/rss/society.xml
       - https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko
 
+# 매체명 표기: 기사 주소의 도메인 → 메시지에 보여줄 이름.
+# 여기에 없는 도메인은 피드가 알려주는 이름을 정리해서 씁니다. 새 피드를 추가할 때 이름을 함께 적어 두세요.
+source_names:
+  tokenpost.kr: 토큰포스트
+  blockmedia.co.kr: 블록미디어
+  yna.co.kr: 연합뉴스
+  hankyung.com: 한국경제
+  etnews.com: 전자신문
+
 # 관심 키워드. 키워드마다 구글 뉴스 검색 결과로 섹션이 하나씩 추가됩니다.
 # 예시:
 # keywords:

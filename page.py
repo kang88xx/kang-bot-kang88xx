@@ -20,7 +20,7 @@ h2{font-size:18px;margin:28px 0 12px;padding-top:12px;border-top:1px solid var(-
 article{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:0 0 10px}
 article h3{font-size:16px;margin:0 0 8px;line-height:1.4}article h3 a{color:var(--fg);text-decoration:none}article h3 a:hover{color:var(--accent)}
 article ul{margin:0;padding-left:18px;font-size:15px}article li{margin:2px 0}
-.meta{color:var(--muted);font-size:12.5px;margin-top:8px}
+.meta{color:var(--muted);font-size:12.5px;margin-top:8px}.meta a{color:var(--accent);text-decoration:none}
 nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px}nav a{font-size:13px;color:var(--accent);text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
 footer{color:var(--muted);font-size:13px;margin-top:32px}footer a{color:var(--accent)}
 """
@@ -47,12 +47,15 @@ def render(sections: list[dict], now: datetime, archive_dates: list[str]) -> str
             parts.append("<p class='meta'>오늘은 수집된 기사가 없습니다.</p>")
         for it in sec.get("items", []):
             lines = "".join(f"<li>{html.escape(l)}</li>" for l in it.get("summary", []))
-            meta = " · ".join(x for x in [it.get("source", ""), _fmt_time(it.get("published"), tz)] if x)
+            src = (f"출처: <a href='{html.escape(it['link'])}' target='_blank' rel='noopener'>"
+                   f"{html.escape(it.get('source') or '원문')}</a>")
+            when = _fmt_time(it.get("published"), tz)
+            meta = f"{src} · {html.escape(when)}" if when else src
             parts.append(
                 f"<article><h3><a href='{html.escape(it['link'])}' target='_blank' rel='noopener'>"
                 f"{html.escape(it.get('headline') or it['title'])}</a></h3>"
                 f"{'<ul>' + lines + '</ul>' if lines else ''}"
-                f"<div class='meta'>{html.escape(meta)}</div></article>")
+                f"<div class='meta'>{meta}</div></article>")
     if archive_dates:
         links = " · ".join(f"<a href='archive/{d}.html'>{d}</a>" for d in archive_dates)
         parts.append(f"<footer>지난 브리핑: {links}</footer>")

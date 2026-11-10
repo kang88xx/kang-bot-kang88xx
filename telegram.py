@@ -1,6 +1,7 @@
 """텔레그램 봇 API: 메시지 발송(4096자 분할, 재시도, HTML 실패 시 평문 재전송), 업데이트 조회."""
 from __future__ import annotations
 
+import html
 import re
 import time
 
@@ -8,7 +9,7 @@ import requests
 
 API = "https://api.telegram.org/bot{token}/{method}"
 TEXT_LIMIT = 4096
-SAFE_LIMIT = 3900  # HTML 태그 여유분을 두고 자르는 기준
+SAFE_LIMIT = 3900  # 4096자 제한 아래로 두는 안전 마진
 TAG_RE = re.compile(r"<[^>]+>")
 
 
@@ -64,17 +65,22 @@ def get_updates(token: str, offset: int | None = None) -> list[dict]:
     return _call(token, "getUpdates", **params)
 
 
+def visible_len(text: str) -> int:
+    """텔레그램이 세는 길이: 태그를 벗긴 본문의 UTF-16 단위 수 (4096자 제한은 엔티티 파싱 후 본문 기준)."""
+    return len(strip_html(text).encode("utf-16-le")) // 2
+
+
 def _split_long_line(line: str, limit: int) -> list[str]:
     """한 줄이 limit 를 넘을 때 공백 경계로 자른다. <a>…</a> 와 그 외 태그는 한 토큰으로 묶어 안에서 끊지 않는다."""
     tokens = [tok for tok in re.split(r"(<a\b[^>]*>.*?</a>|<[^>]+>|\s+)", line) if tok]
     out, cur = [], ""
     for tok in tokens:
-        if len(cur) + len(tok) <= limit:
+        if visible_len(cur + tok) <= limit:
             cur += tok
         else:
             if cur.strip():
                 out.append(cur.rstrip())
-            cur = tok if len(tok) <= limit else tok[:limit]
+            cur = tok if visible_len(tok) <= limit else tok[:limit]
     if cur.strip():
         out.append(cur.rstrip())
     return out
@@ -93,18 +99,18 @@ def split_message(text: str, limit: int = SAFE_LIMIT) -> list[str]:
 
     for para in text.split("\n\n"):
         candidate = f"{cur}\n\n{para}" if cur else para
-        if len(candidate) <= limit:
+        if visible_len(candidate) <= limit:
             cur = candidate
             continue
         flush()
-        if len(para) <= limit:
+        if visible_len(para) <= limit:
             cur = para
             continue
         for line in para.split("\n"):
-            pieces = [line] if len(line) <= limit else _split_long_line(line, limit)
+            pieces = [line] if visible_len(line) <= limit else _split_long_line(line, limit)
             for piece in pieces:
                 candidate = f"{cur}\n{piece}" if cur else piece
-                if len(candidate) <= limit:
+                if visible_len(candidate) <= limit:
                     cur = candidate
                 else:
                     flush()
@@ -114,8 +120,7 @@ def split_message(text: str, limit: int = SAFE_LIMIT) -> list[str]:
 
 
 def strip_html(text: str) -> str:
-    import html as _html
-    return _html.unescape(TAG_RE.sub("", text))
+    return html.unescape(TAG_RE.sub("", text))
 
 
 def send_chunk(token: str, chat_id: str | int, chunk: str, parse_mode: str | None = "HTML") -> None:

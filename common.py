@@ -34,6 +34,9 @@ def load_config(path: Path = ROOT / "config.yaml") -> dict:
     cfg.setdefault("sections", [])
     cfg.setdefault("keywords", []) 
     cfg["keywords"] = [k for k in (cfg.get("keywords") or []) if k]
+    names = cfg.get("source_names")
+    cfg["source_names"] = ({str(k).lower(): str(v) for k, v in names.items() if k and v}
+                           if isinstance(names, dict) else {})
     return cfg
 
 
