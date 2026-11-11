@@ -107,7 +107,7 @@ def main() -> int:
     checkin.save_state(state)
 
     url = page_url(load_config())
-    text = ("✅ <b>데일리 비서 설정 완료</b>\n내일 아침 7시 50분부터 이 채팅방으로 브리핑이 도착합니다.\n\n"
+    text = ("✅ <b>데일리 비서 설정 완료</b>\n내일 아침 7시부터 이 채팅방으로 브리핑이 도착합니다.\n\n"
             "체크인은 이 채팅에 답장으로:\n<code>운동: O/X\n업무: 오늘 핵심 1~3개\n언어공부: O/X</code>")
     try:
         send_message(token, values["TELEGRAM_CHAT_ID"], text)

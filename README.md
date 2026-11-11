@@ -1,6 +1,6 @@
 # ☀️ 데일리 비서 — 아침 뉴스 브리핑 + 체크인 → 텔레그램
 
-매일 아침 7시 50분(한국시간), 크립토·경제/주식·IT/AI·국내 뉴스를 Claude가 선별·요약해
+매일 아침 7시(한국시간), 크립토·경제/주식·IT/AI·국내 뉴스를 Claude가 선별·요약해
 **텔레그램**으로 보내고, 어제 보낸 **체크인(운동/업무/언어공부) 답장**을 읽어 짧은 코멘트를 함께 보냅니다.
 전체 요약은 GitHub Pages 웹페이지에서도 볼 수 있습니다.
 
@@ -39,7 +39,7 @@ python setup.py
 ### 4. 바로 한 번 보내보기
 
 GitHub 저장소 → **Actions → Daily assistant briefing → Run workflow**. 1~2분 뒤 텔레그램이 옵니다.
-이후에는 매일 아침 7시 50분에 자동 실행됩니다.
+이후에는 매일 아침 7시에 자동 실행됩니다.
 
 ## 체크인 사용법
 
@@ -65,9 +65,7 @@ GitHub 저장소 → **Actions → Daily assistant briefing → Run workflow**. 
 
 - 지역 추가·삭제: `config.yaml`의 `weather.locations`에 이름과 좌표(`lat`, `lon`)를 적습니다.
 - 예보 일수: `weather.days_ahead` (기본 3 = 오늘 + 3일).
-- 발송 시각: `.github/workflows/weather.yml`. GitHub 예약 실행이 몇 시간씩 늦게 시작되기 때문에 새벽 2시(`cron: "0 17 * * *"`)에
-  걸어 두고 워크플로 안에서 07:00까지 기다렸다가 보냅니다. 시각을 바꾸려면 워크플로의 `date -d "07:00"`을 고치고,
-  cron은 그보다 5시간 이내로 앞선 시각으로 둡니다(작업 한도 6시간). 실행이 07:00보다 늦게 시작된 날은 시작 즉시 보냅니다.
+- 발송 시각: `.github/workflows/weather.yml` (아래 [설정 바꾸기](#설정-바꾸기-configyaml)의 발송 시각 설명 참고).
 - 바로 받아 보기: Actions → **Daily weather → Run workflow** (기다리지 않고 즉시 발송).
 - 미리보기: `python weather.py --dry-run`
 
@@ -83,8 +81,11 @@ GitHub 저장소 → **Actions → Daily assistant briefing → Run workflow**. 
 | `max_candidates` | Claude에게 넘기는 섹션당 후보 수. 줄이면 비용 감소 |
 | `weather.locations`, `weather.days_ahead` | 날씨 알림 지역(이름·좌표)과 예보 일수 |
 
-발송 시각은 `.github/workflows/morning.yml`의 `cron` (UTC 기준, 한국시간 −9시간)을 고치면 됩니다.
-예: 오전 7시 → `"0 22 * * *"`, 오전 8시 → `"0 23 * * *"`.
+발송 시각(뉴스 브리핑 `.github/workflows/morning.yml`, 날씨 `.github/workflows/weather.yml` 모두 07:00):
+GitHub 예약 실행이 몇 시간씩 늦게 시작되기 때문에 두 워크플로 모두 새벽 2시(`cron: "0 17 * * *"`, UTC 기준)에 걸어 두고
+워크플로 안에서 07:00까지 기다렸다가 보냅니다. 시각을 바꾸려면 워크플로의 `date -d "07:00"`을 고치고,
+cron은 그보다 5시간 이내로 앞선 시각으로 둡니다(작업 한도 6시간). 실행이 목표 시각보다 늦게 시작된 날은 시작 즉시 보냅니다.
+뉴스 브리핑은 07:00에 수집·요약을 시작하므로 메시지는 30초~1분쯤 뒤에 도착합니다.
 
 ## 로컬에서 테스트
 

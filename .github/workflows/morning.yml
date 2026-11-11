@@ -2,9 +2,11 @@ name: Daily assistant briefing
 
 on:
   schedule:
-    # UTC 기준. 22:50 UTC = 한국시간 07:50 (GitHub 사정으로 몇 분 늦을 수 있음)
-    - cron: "50 22 * * *"
-  workflow_dispatch:   # Actions 탭에서 수동 실행용
+    # UTC 기준. 17:00 UTC = 한국시간 02:00.
+    # GitHub 예약 실행은 이 저장소에서 3~5시간씩 늦게 시작되므로, 일찍 걸어 두고
+    # 아래 "Wait until 07:00 KST" 단계에서 07:00 정각까지 기다렸다가 수집·발송한다.
+    - cron: "0 17 * * *"
+  workflow_dispatch:   # Actions 탭에서 수동 실행용 (기다리지 않고 바로 발송)
 
 permissions:
   contents: write
@@ -16,7 +18,7 @@ concurrency:
 jobs:
   send:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 330   # 대기 최대 5시간 + 실행 시간 (GitHub 작업 한도는 6시간)
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +28,21 @@ jobs:
           cache: pip
 
       - run: pip install -r requirements.txt
+
+      - name: Wait until 07:00 KST
+        if: github.event_name == 'schedule'
+        run: |
+          target=$(TZ=Asia/Seoul date -d "07:00" +%s)   # 오늘 07:00 (한국시간)
+          left=$(( target - $(date +%s) ))
+          if [ "$left" -le 0 ]; then
+            echo "이미 07:00 이 지났습니다 ($(( -left / 60 ))분 늦음). 바로 발송합니다."
+            exit 0
+          fi
+          echo "07:00 까지 $(( left / 60 ))분 대기"
+          while [ "$left" -gt 0 ]; do
+            sleep $(( left < 600 ? left : 600 ))
+            left=$(( target - $(date +%s) ))
+          done
 
       - name: Build digest and send to Telegram
         env:

@@ -15,7 +15,7 @@ from telegram import get_updates
 
 STATE_FILE = ROOT / "state" / "telegram_state.json"
 FIELDS = {"exercise": "운동", "work": "업무", "language": "언어공부"}
-# 새벽 04:00 전에 보낸 답장은 전날 체크인으로 친다 (아침 발송 07:50 이전이면 어차피 전날 것)
+# 새벽 04:00 전에 보낸 답장은 전날 체크인으로 친다 (아침 발송 07:00 이전이면 어차피 전날 것)
 DAY_CUTOFF_HOURS = 4
 
 # 키워드는 줄 처음 또는 구분자(/ , ; | . !) 바로 뒤에서만 항목 시작으로 본다.
