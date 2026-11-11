@@ -9,6 +9,7 @@
 - 요약: Claude API (유료, 하루 1회 호출)
 - 출처: 기사마다 `출처: 매체명` 링크로 원문 기사를 열 수 있음
 - 체크인: 봇 채팅에 답장하면 다음 날 아침 브리핑이 읽고 연속일수와 코멘트를 붙임
+- 날씨: 매일 아침 7시(한국시간), 지역별 오늘 + 앞으로 3일 예보를 별도 메시지로 발송 (무료, 아래 [날씨 알림](#날씨-알림) 참고)
 
 ## 최초 설정 (한 번만)
 
@@ -57,6 +58,19 @@ GitHub 저장소 → **Actions → Daily assistant briefing → Run workflow**. 
 - 같은 날 여러 번 보내면 항목별로 합쳐지고, 메시지를 수정해도 반영됩니다.
 - 항목은 줄 처음이나 `/`, `,` 뒤에서 `운동`·`업무`·`언어`(또는 `공부`)로 시작해야 인식됩니다. 메모 안에 들어간 단어는 무시합니다.
 
+## 날씨 알림
+
+매일 아침 7시에 `weather.py`가 지역별 현재 기온과 오늘 + 앞으로 3일의 날씨·최저/최고 기온·강수확률을 보냅니다.
+예보는 [Open-Meteo](https://open-meteo.com/)에서 가져오며 API 키와 Claude 호출이 없어 비용이 들지 않습니다.
+
+- 지역 추가·삭제: `config.yaml`의 `weather.locations`에 이름과 좌표(`lat`, `lon`)를 적습니다.
+- 예보 일수: `weather.days_ahead` (기본 3 = 오늘 + 3일).
+- 발송 시각: `.github/workflows/weather.yml`. GitHub 예약 실행이 몇 시간씩 늦게 시작되기 때문에 새벽 2시(`cron: "0 17 * * *"`)에
+  걸어 두고 워크플로 안에서 07:00까지 기다렸다가 보냅니다. 시각을 바꾸려면 워크플로의 `date -d "07:00"`을 고치고,
+  cron은 그보다 5시간 이내로 앞선 시각으로 둡니다(작업 한도 6시간). 실행이 07:00보다 늦게 시작된 날은 시작 즉시 보냅니다.
+- 바로 받아 보기: Actions → **Daily weather → Run workflow** (기다리지 않고 즉시 발송).
+- 미리보기: `python weather.py --dry-run`
+
 ## 설정 바꾸기 (`config.yaml`)
 
 | 항목 | 설명 |
@@ -67,6 +81,7 @@ GitHub 저장소 → **Actions → Daily assistant briefing → Run workflow**. 
 | `model`, `effort` | 요약 모델과 노력도. `claude-haiku-5-5`로 바꾸면 비용이 1/40 수준 |
 | `source_names` | 기사 도메인 → 표시할 매체명 (예: `yna.co.kr: 연합뉴스`). 새 피드를 추가할 때 함께 지정, 없으면 피드가 알려주는 이름을 정리해 사용 |
 | `max_candidates` | Claude에게 넘기는 섹션당 후보 수. 줄이면 비용 감소 |
+| `weather.locations`, `weather.days_ahead` | 날씨 알림 지역(이름·좌표)과 예보 일수 |
 
 발송 시각은 `.github/workflows/morning.yml`의 `cron` (UTC 기준, 한국시간 −9시간)을 고치면 됩니다.
 예: 오전 7시 → `"0 22 * * *"`, 오전 8시 → `"0 23 * * *"`.
